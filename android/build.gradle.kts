@@ -55,6 +55,6 @@ kotlin {
 
 dependencies {
     // The Kotlin library this plugin wraps: the Agent protocol, its checks and push verification.
-    implementation("net.ohrtech:device-sdk:0.3.0")
+    implementation("net.ohrtech:device-sdk:0.3.1")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.11.0")
 }
