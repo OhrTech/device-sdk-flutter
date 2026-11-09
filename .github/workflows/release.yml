@@ -35,7 +35,15 @@ jobs:
       - run: flutter pub get
       - run: flutter analyze
       - run: flutter test
-      - run: flutter pub publish --force
+      # A version already on pub.dev (the first one, which pub.dev only takes from a person) isn't sent again.
+      - name: Publish to pub.dev
+        run: |
+          v=${GITHUB_REF_NAME#v}
+          if [ "$(curl -s -o /dev/null -w '%{http_code}' "https://pub.dev/api/packages/ohrtech_device/versions/$v")" = 200 ]; then
+            echo "ohrtech_device $v is already on pub.dev"
+          else
+            flutter pub publish --force
+          fi
 
       - name: GitHub release
         env:
