@@ -1,0 +1,43 @@
+# Push a tag such as v0.1.0 to publish that version to pub.dev. Publishing uses pub.dev's automated
+# publishing from GitHub Actions (no stored token): the package's admin page on pub.dev trusts this
+# repository's tags matching v{{version}}, in the "release" environment.
+name: Release
+
+on:
+  push:
+    tags: ['v[0-9]+.[0-9]+.[0-9]+*']
+
+permissions:
+  contents: write
+  id-token: write   # the OIDC token pub.dev takes instead of a stored credential
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    environment: release
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: 21
+      # setup-dart configures pub.dev's credentials from the OIDC token; Flutter does the publishing.
+      - uses: dart-lang/setup-dart@v1
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+
+      - name: The tag is the pubspec's version
+        run: |
+          v=$(grep -E '^version:' pubspec.yaml | awk '{print $2}')
+          test "v$v" = "$GITHUB_REF_NAME" || { echo "tag $GITHUB_REF_NAME, pubspec $v"; exit 1; }
+
+      - run: flutter pub get
+      - run: flutter analyze
+      - run: flutter test
+      - run: flutter pub publish --force
+
+      - name: GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "$GITHUB_REF_NAME" --title "$GITHUB_REF_NAME" --notes "See CHANGELOG.md." $([[ "$GITHUB_REF_NAME" == *-* ]] && echo --prerelease)
