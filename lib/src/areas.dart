@@ -244,6 +244,10 @@ abstract final class OhrKiosk {
   /// Tells the Agent's kiosk watchdog that the app's UI isolate is alive: beats from this isolate's event
   /// loop, a few times per [timeout]. If the beats stop for longer (the UI hangs), the Agent stops the app
   /// and starts it again. Only while the app is pinned; call it again after [start]. One per app.
+  ///
+  /// With Agent 1062+, the fleet's response timeout for the app (portal or Management API), when set, replaces
+  /// [timeout], and hangs aren't counted while the screen is off (the app gets a full timeout again when it
+  /// comes back on).
   static Future<void> heartbeat({Duration timeout = const Duration(seconds: 10)}) async {
     final ms = timeout.inMilliseconds;
     if (ms < 2000 || ms > 600000) throw const OhrInvalidConfig('timeout: 2 s to 10 minutes', 'timeout', '2 s to 10 minutes');
