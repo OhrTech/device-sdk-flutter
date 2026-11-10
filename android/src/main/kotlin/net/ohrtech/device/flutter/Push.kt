@@ -24,14 +24,22 @@ import java.util.concurrent.TimeUnit
  * to [PushDispatcher.HANDLER_MS]) so the process stays up while it works.
  */
 class OhrDevicePushService : OhrPushService() {
-    override fun onMessage(message: OhrPushMessage) =
-        PushDispatcher.deliver(applicationContext, "message") { api, h -> if (h.onMessage != 0L) api.onMessage(h.onMessage, message.toPigeon()) }
+    /** A message the Dart handler didn't take is reported to the hub as dropped (see [PushDispatcher.deliver]'s reasons). */
+    override fun onMessage(message: OhrPushMessage) {
+        val failed = PushDispatcher.deliver(applicationContext, "message") { api, h ->
+            if (h.onMessage == 0L) throw NotHandled("no_handler")
+            api.onMessage(h.onMessage, message.toPigeon())
+        }
+        if (failed != null) throw NotHandled(failed)
+    }
 
-    override fun onTokenChanged(token: PushToken?) =
+    override fun onTokenChanged(token: PushToken?) {
         PushDispatcher.deliver(applicationContext, "token") { api, h -> if (h.onTokenChanged != 0L) api.onTokenChanged(h.onTokenChanged, token?.toPigeon()) }
+    }
 
-    override fun onDropped(pushId: String, reason: String) =
+    override fun onDropped(pushId: String, reason: String) {
         PushDispatcher.deliver(applicationContext, "dropped") { api, h -> if (h.onDropped != 0L) api.onDropped(h.onDropped, pushId, reason) }
+    }
 }
 
 /**
@@ -67,14 +75,15 @@ internal object PushDispatcher : OhrPushBackgroundHostApi {
     override fun ready() = ready.countDown()
 
     /**
-     * Runs [call] in the background isolate and waits for it (on the service's worker thread).
-     * Without a registered dispatcher the app gets nothing: it registered no handler.
+     * Runs [call] in the background isolate and waits for it (on the service's worker thread). Null when it ran,
+     * else why not: "no_handler" (OhrPush.setHandlers never ran), "no_engine" (the background isolate didn't start),
+     * "handler_timeout", or "handler" (it threw).
      */
-    fun deliver(context: Context, what: String, call: suspend (OhrPushFlutterApi, Handles) -> Unit) {
+    fun deliver(context: Context, what: String, call: suspend (OhrPushFlutterApi, Handles) -> Unit): String? {
         val h = handles(context)
         if (h.dispatcher == 0L) {
             Log.w(TAG, "Push $what: the app registered no handler (OhrPush.setHandlers)")
-            return
+            return "no_handler"
         }
         val started = CountDownLatch(1)
         var bg: OhrPushFlutterApi? = null
@@ -87,22 +96,32 @@ internal object PushDispatcher : OhrPushBackgroundHostApi {
             started.countDown()
         }
         started.await()
-        val a = bg ?: return
+        val a = bg ?: return "no_engine"
         if (!ready.await(HANDLER_MS, TimeUnit.MILLISECONDS)) {
             Log.e(TAG, "Push $what: the background isolate didn't start in time")
-            return
+            return "no_engine"
         }
         val done = CountDownLatch(1)
+        var failed: String? = "handler_timeout"
         CoroutineScope(Dispatchers.Main).launch {
             try {
-                withTimeoutOrNull(HANDLER_MS) { call(a, h) } ?: Log.w(TAG, "Push $what: the handler took longer than ${HANDLER_MS / 1000} s")
+                if (withTimeoutOrNull(HANDLER_MS) { call(a, h) } == null) {
+                    Log.w(TAG, "Push $what: the handler took longer than ${HANDLER_MS / 1000} s")
+                } else {
+                    failed = null
+                }
+            } catch (e: OhrPushService.NotHandled) {
+                Log.w(TAG, "Push $what: ${e.reason}")
+                failed = e.reason
             } catch (e: Exception) {
                 Log.e(TAG, "Push $what: the handler threw", e)
+                failed = "handler"
             } finally {
                 done.countDown()
             }
         }
         done.await(HANDLER_MS + 2_000, TimeUnit.MILLISECONDS)
+        return failed
     }
 
     /** The engine (on the main thread), started once. */

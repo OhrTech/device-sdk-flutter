@@ -9,7 +9,10 @@ import 'checks.dart';
 /// Runs in a background isolate for each push message, whether the app is open or not.
 @pragma('vm:entry-point')
 Future<void> onPushMessage(OhrPushMessage message) async {
-  debugPrint('PUSH RECEIVED ${message.id} (${message.pushId}): ${utf8.decode(message.data)}');
+  final text = utf8.decode(message.data);
+  // The device checks' failing handler: the hub then shows the message as dropped (app_handler).
+  if (text.contains('"fail"')) throw StateError('the handler failed, as asked');
+  debugPrint('PUSH RECEIVED ${message.id} (${message.pushId}): $text');
 }
 
 @pragma('vm:entry-point')

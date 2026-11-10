@@ -138,8 +138,9 @@ class _Dispatcher implements g.OhrPushFlutterApi {
   T? _handler<T>(int handle) => PluginUtilities.getCallbackFromHandle(CallbackHandle.fromRawHandle(handle)) as T?;
 
   @override
+  // No handler (its callback wasn't found) is an error, so the message is reported as not taken.
   Future<void> onMessage(int handler, g.PushMessageData message) async =>
-      await _handler<OhrPushMessageHandler>(handler)?.call(OhrPushMessage._(message));
+      await (_handler<OhrPushMessageHandler>(handler) ?? (throw StateError('no onMessage handler')))(OhrPushMessage._(message));
 
   @override
   Future<void> onTokenChanged(int handler, g.PushTokenData? token) async =>

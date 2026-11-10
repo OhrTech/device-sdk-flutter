@@ -19,8 +19,30 @@ abstract final class OhrDeviceSdk {
   /// The connection now.
   static Future<OhrConnection> connection() async => _connection(await callLocal((a) => a.connectionState()));
 
-  /// The connection as it changes, starting with how it stands.
-  static final Stream<OhrConnection> connectionChanges = shared(g.connection, (g.ConnectionInfo c) => _connection(c.state));
+  /// The connection as it changes, starting with how it stands (for each listener).
+  static final Stream<OhrConnection> connectionChanges = Stream<OhrConnection>.multi((controller) {
+    OhrConnection? last;
+    var heard = false;
+    void emit(OhrConnection c) {
+      if (c == last) return;
+      last = c;
+      controller.addSync(c);
+    }
+
+    final sub = _connectionChanges.listen((c) {
+      heard = true;
+      emit(c);
+    }, onError: controller.addErrorSync, onDone: controller.closeSync);
+    controller.onCancel = sub.cancel;
+    // The shared watch gives the state only to its first listener: each later one asks.
+    connection().then((c) {
+      if (!heard && !controller.isClosed) emit(c);
+    }, onError: (Object e) {
+      if (!controller.isClosed) controller.addErrorSync(e);
+    });
+  }, isBroadcast: true);
+
+  static final Stream<OhrConnection> _connectionChanges = shared(g.connection, (g.ConnectionInfo c) => _connection(c.state));
 
   static OhrConnection _connection(String name) =>
       OhrConnection.values.firstWhere((c) => c.wire == name, orElse: () => OhrConnection.notConnected);

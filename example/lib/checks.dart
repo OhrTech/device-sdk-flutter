@@ -91,6 +91,15 @@ class _ChecksAppState extends State<ChecksApp> {
         });
         await _step('stream: connection', () async =>
             (await OhrDeviceSdk.connectionChanges.first.timeout(const Duration(seconds: 5))).name);
+        await _step('stream: connection, a second listener starts with the state too', () async {
+          final first = OhrDeviceSdk.connectionChanges.listen((_) {});
+          try {
+            await Future<void>.delayed(const Duration(milliseconds: 500));
+            return (await OhrDeviceSdk.connectionChanges.first.timeout(const Duration(seconds: 5))).name;
+          } finally {
+            await first.cancel();
+          }
+        });
       case 'security':
         await _step('attest ec', () async {
           final a = await OhrAttestation.attest(Uint8List.fromList(utf8.encode('flutter-checks')));

@@ -4,7 +4,7 @@ description: >-
   The device, its updates, Wi-Fi with Android's Wi-Fi screen in your layout, network, kiosk mode, power,
   settings, managed configuration, attestation, client certificates, USB devices, diagnostics, TEE keys
   and end-to-end push.
-version: 0.1.0
+version: 0.1.1
 homepage: https://docs.ohrtech.net/device-sdk/
 repository: https://github.com/OhrTech/device-sdk-flutter
 issue_tracker: https://github.com/OhrTech/device-sdk-flutter/issues
